@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Incident Handoff Builder</title>
+  <meta name="description" content="Static browser tool for turning raw outage notes into a concise incident handoff brief.">
+  <meta property="og:title" content="Incident Handoff Builder">
+  <meta property="og:description" content="Turn timeline notes, impact details, and action items into a shareable incident handoff brief.">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#11202c">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="shell header">
+    <p class="eyebrow">Incident workflow tool</p>
+    <h1>Incident Handoff Builder</h1>
+    <p class="lead">Turn scattered outage notes into one readable shift-handoff brief with timeline, owners, and next actions.</p>
+    <div class="header-actions">
+      <button id="load-sample" class="primary" type="button">Load Sample Incident</button>
+      <button id="copy-markdown" type="button">Copy Markdown Brief</button>
+      <button id="export-markdown" type="button">Export Markdown</button>
+      <button id="export-json" type="button">Export JSON</button>
+      <button id="import-json" type="button">Import JSON</button>
+    </div>
+    <p id="status" class="status" aria-live="polite">Ready for a new handoff.</p>
+    <input id="import-file" type="file" accept="application/json" hidden>
+  </header>
+
+  <main class="shell layout">
+    <section class="panel form-panel">
+      <div class="panel-head">
+        <h2>Incident Facts</h2>
+        <p>Capture only the fields the next responder needs to resume work without rereading a chat thread.</p>
+      </div>
+
+      <div class="grid two">
+        <label>
+          Incident title
+          <input id="incident-title" type="text" placeholder="Checkout API latency spike">
+        </label>
+        <label>
+          Current owner
+          <input id="incident-owner" type="text" placeholder="On-call backend engineer">
+        </label>
+        <label>
+          Severity
+          <select id="incident-severity">
+            <option value="SEV-1">SEV-1</option>
+            <option value="SEV-2" selected>SEV-2</option>
+            <option value="SEV-3">SEV-3</option>
+            <option value="SEV-4">SEV-4</option>
+          </select>
+        </label>
+        <label>
+          Current status
+          <select id="incident-phase">
+            <option value="Investigating" selected>Investigating</option>
+            <option value="Mitigating">Mitigating</option>
+            <option value="Monitoring">Monitoring</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+        </label>
+      </div>
+
+      <label>
+        What happened
+        <textarea id="incident-summary" rows="3" placeholder="Brief plain-language summary of the failure mode."></textarea>
+      </label>
+
+      <label>
+        Customer impact
+        <textarea id="incident-impact" rows="3" placeholder="Who is affected, what is degraded, and how visible is it externally?"></textarea>
+      </label>
+
+      <div class="grid two">
+        <label>
+          Detection signal
+          <textarea id="incident-detection" rows="3" placeholder="Alert name, dashboard, customer report, or metric that surfaced the issue."></textarea>
+        </label>
+        <label>
+          Next-shift handoff note
+          <textarea id="incident-handoff" rows="3" placeholder="One paragraph for the next responder: current theory, blocked step, and what to do first."></textarea>
+        </label>
+      </div>
+
+      <section class="subpanel">
+        <div class="subpanel-head">
+          <h3>Readiness Checklist</h3>
+          <p>These checks feed the handoff posture so the brief says whether the incident is still fragile.</p>
+        </div>
+        <div class="check-grid">
+          <label class="check-pill"><input id="check-mitigation" type="checkbox"> Mitigation shipped</label>
+          <label class="check-pill"><input id="check-comms" type="checkbox"> Customer comms sent</label>
+          <label class="check-pill"><input id="check-rollback" type="checkbox"> Rollback path tested</label>
+          <label class="check-pill"><input id="check-monitoring" type="checkbox"> Monitoring confirms the trend</label>
+        </div>
+      </section>
+
+      <section class="subpanel">
+        <div class="subpanel-head">
+          <h3>Timeline</h3>
+          <button id="add-timeline" type="button">Add Event</button>
+        </div>
+        <div id="timeline-list" class="stack-list"></div>
+      </section>
+
+      <section class="subpanel">
+        <div class="subpanel-head">
+          <h3>Next Actions</h3>
+          <button id="add-action" type="button">Add Action</button>
+        </div>
+        <div id="action-list" class="stack-list"></div>
+      </section>
+    </section>
+
+    <section class="panel brief-panel">
+      <div class="panel-head">
+        <h2>Handoff Brief</h2>
+        <p>The right side stays concise on purpose: readiness, missing information, and the generated markdown artifact.</p>
+      </div>
+
+      <div class="metrics">
+        <article class="metric-card">
+          <span>Readiness</span>
+          <strong id="readiness-score">0%</strong>
+        </article>
+        <article class="metric-card">
+          <span>Timeline events</span>
+          <strong id="timeline-count">0</strong>
+        </article>
+        <article class="metric-card">
+          <span>Open actions</span>
+          <strong id="action-count">0</strong>
+        </article>
+      </div>
+
+      <section class="brief-box">
+        <p class="box-title">Shift posture</p>
+        <p id="posture-summary" class="box-copy">Incomplete incident context. Fill the basics before handing off.</p>
+      </section>
+
+      <section class="brief-box">
+        <p class="box-title">Missing before handoff</p>
+        <ul id="missing-list" class="bullet-list"></ul>
+      </section>
+
+      <section class="brief-box">
+        <div class="subpanel-head">
+          <div>
+            <p class="box-title">Markdown preview</p>
+            <p class="box-caption">This is the artifact that gets copied/exported.</p>
+          </div>
+        </div>
+        <pre id="markdown-preview" class="markdown-preview"></pre>
+      </section>
+    </section>
+  </main>
+
+  <template id="timeline-template">
+    <article class="row-card" data-kind="timeline">
+      <div class="grid three">
+        <label>
+          Time
+          <input data-field="time" type="text" placeholder="14:08 CT">
+        </label>
+        <label>
+          Owner
+          <input data-field="owner" type="text" placeholder="Payments on-call">
+        </label>
+        <label>
+          Event
+          <input data-field="event" type="text" placeholder="Mitigation pushed to 30% of traffic">
+        </label>
+      </div>
+      <button class="danger remove-row" type="button">Remove</button>
+    </article>
+  </template>
+
+  <template id="action-template">
+    <article class="row-card" data-kind="action">
+      <div class="grid three">
+        <label>
+          Owner
+          <input data-field="owner" type="text" placeholder="API lead">
+        </label>
+        <label>
+          Deadline
+          <input data-field="deadline" type="text" placeholder="Before next deploy window">
+        </label>
+        <label>
+          Action
+          <input data-field="task" type="text" placeholder="Verify cache invalidation path in one failed region">
+        </label>
+      </div>
+      <button class="danger remove-row" type="button">Remove</button>
+    </article>
+  </template>
+
+  <script src="script.js"></script>
+</body>
+</html>

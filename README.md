@@ -22,6 +22,7 @@ This tool structures those pieces and exports a Markdown brief or portable JSON 
 - Owned next-action rows with deadline hints
 - Live completeness scoring and missing-context callouts
 - Markdown preview with copy/export flow
+- Executive update preview for quick Slack/email incident status copy
 - JSON export/import for passing a draft between machines
 - Browser-local persistence so the working brief survives refreshes
 

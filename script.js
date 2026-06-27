@@ -25,6 +25,7 @@ const timelineCountEl = document.getElementById('timeline-count');
 const actionCountEl = document.getElementById('action-count');
 const postureSummaryEl = document.getElementById('posture-summary');
 const missingListEl = document.getElementById('missing-list');
+const executivePreviewEl = document.getElementById('executive-preview');
 const markdownPreviewEl = document.getElementById('markdown-preview');
 const statusEl = document.getElementById('status');
 const importFileEl = document.getElementById('import-file');
@@ -268,6 +269,25 @@ function buildMarkdown() {
   ].join('\n');
 }
 
+function firstOwnedAction() {
+  return state.actions.find((row) => row.owner.trim() && row.task.trim());
+}
+
+function buildExecutiveUpdate() {
+  const nextAction = firstOwnedAction();
+  const nextStep = nextAction
+    ? `${nextAction.owner} owns ${nextAction.task}${nextAction.deadline.trim() ? ` (${nextAction.deadline.trim()})` : ''}.`
+    : 'No owned next step is captured yet.';
+
+  return [
+    `${state.severity} | ${state.title.trim() || 'Untitled incident'} | ${state.phase}`,
+    `Owner: ${state.owner.trim() || 'Unassigned'}`,
+    `Impact: ${state.impact.trim() || 'Customer impact still being qualified.'}`,
+    `Posture: ${postureSummary()}`,
+    `Next: ${nextStep}`,
+  ].join('\n');
+}
+
 function exportTextFile(filename, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -282,6 +302,15 @@ async function copyMarkdown() {
   try {
     await navigator.clipboard.writeText(buildMarkdown());
     setStatus('Copied the current markdown handoff brief.');
+  } catch (error) {
+    setStatus('Clipboard copy failed in this browser.');
+  }
+}
+
+async function copyExecutiveUpdate() {
+  try {
+    await navigator.clipboard.writeText(buildExecutiveUpdate());
+    setStatus('Copied the executive update.');
   } catch (error) {
     setStatus('Clipboard copy failed in this browser.');
   }
@@ -315,6 +344,7 @@ function update() {
     missingListEl.appendChild(li);
   });
 
+  executivePreviewEl.textContent = buildExecutiveUpdate();
   markdownPreviewEl.textContent = buildMarkdown();
 }
 
@@ -325,6 +355,7 @@ document.getElementById('load-sample').addEventListener('click', () => {
 });
 
 document.getElementById('copy-markdown').addEventListener('click', copyMarkdown);
+document.getElementById('copy-exec-update').addEventListener('click', copyExecutiveUpdate);
 
 document.getElementById('export-markdown').addEventListener('click', () => {
   exportTextFile('incident-handoff.md', buildMarkdown(), 'text/markdown');

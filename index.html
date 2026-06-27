@@ -22,6 +22,7 @@
     <div class="header-actions">
       <button id="load-sample" class="primary" type="button">Load Sample Incident</button>
       <button id="copy-markdown" type="button">Copy Markdown Brief</button>
+      <button id="copy-exec-update" type="button">Copy Exec Update</button>
       <button id="export-markdown" type="button">Export Markdown</button>
       <button id="export-json" type="button">Export JSON</button>
       <button id="import-json" type="button">Import JSON</button>
@@ -141,6 +142,16 @@
       <section class="brief-box">
         <p class="box-title">Shift posture</p>
         <p id="posture-summary" class="box-copy">Incomplete incident context. Fill the basics before handing off.</p>
+      </section>
+
+      <section class="brief-box">
+        <div class="subpanel-head">
+          <div>
+            <p class="box-title">Executive Update</p>
+            <p class="box-caption">Short status copy for Slack, email, or an incident room pin.</p>
+          </div>
+        </div>
+        <pre id="executive-preview" class="markdown-preview executive-preview"></pre>
       </section>
 
       <section class="brief-box">

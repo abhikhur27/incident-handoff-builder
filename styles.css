@@ -264,6 +264,11 @@ textarea {
   white-space: pre-wrap;
 }
 
+.executive-preview {
+  background: #1a2a35;
+  color: #f5fbfd;
+}
+
 @media (max-width: 920px) {
   .layout {
     grid-template-columns: 1fr;

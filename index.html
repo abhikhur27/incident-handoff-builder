@@ -145,6 +145,11 @@
       </section>
 
       <section class="brief-box">
+        <p class="box-title">Action posture</p>
+        <p id="action-posture" class="box-copy">No owned follow-up is captured yet.</p>
+      </section>
+
+      <section class="brief-box">
         <div class="subpanel-head">
           <div>
             <p class="box-title">Executive Update</p>
@@ -193,10 +198,18 @@
 
   <template id="action-template">
     <article class="row-card" data-kind="action">
-      <div class="grid three">
+      <div class="grid four">
         <label>
           Owner
           <input data-field="owner" type="text" placeholder="API lead">
+        </label>
+        <label>
+          Status
+          <select data-field="status">
+            <option value="open">Open</option>
+            <option value="blocked">Blocked</option>
+            <option value="done">Done</option>
+          </select>
         </label>
         <label>
           Deadline

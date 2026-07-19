@@ -24,6 +24,7 @@ const readinessScoreEl = document.getElementById('readiness-score');
 const timelineCountEl = document.getElementById('timeline-count');
 const actionCountEl = document.getElementById('action-count');
 const postureSummaryEl = document.getElementById('posture-summary');
+const actionPostureEl = document.getElementById('action-posture');
 const missingListEl = document.getElementById('missing-list');
 const executivePreviewEl = document.getElementById('executive-preview');
 const markdownPreviewEl = document.getElementById('markdown-preview');
@@ -61,7 +62,7 @@ function blankTimelineRow() {
 }
 
 function blankActionRow() {
-  return { id: crypto.randomUUID(), owner: '', deadline: '', task: '' };
+  return { id: crypto.randomUUID(), owner: '', deadline: '', task: '', status: 'open' };
 }
 
 function sampleState() {
@@ -87,8 +88,8 @@ function sampleState() {
       { id: crypto.randomUUID(), time: '14:24 CT', owner: 'Backend on-call', event: 'Latency returned to baseline across all regions.' },
     ],
     actions: [
-      { id: crypto.randomUUID(), owner: 'Backend on-call', deadline: 'Before 18:00 CT', task: 'Review invalidation burst traces in the first affected region.' },
-      { id: crypto.randomUUID(), owner: 'Platform lead', deadline: 'Next deploy window', task: 'Confirm rollback recipe for cache pool config changes.' },
+      { id: crypto.randomUUID(), owner: 'Backend on-call', deadline: 'Before 18:00 CT', task: 'Review invalidation burst traces in the first affected region.', status: 'open' },
+      { id: crypto.randomUUID(), owner: 'Platform lead', deadline: 'Next deploy window', task: 'Confirm rollback recipe for cache pool config changes.', status: 'blocked' },
     ],
   };
 }
@@ -116,7 +117,13 @@ function normalizeState(raw) {
       ? raw.timeline.map((row) => ({ id: row.id || crypto.randomUUID(), time: row.time || '', owner: row.owner || '', event: row.event || '' }))
       : [blankTimelineRow()],
     actions: Array.isArray(raw.actions) && raw.actions.length
-      ? raw.actions.map((row) => ({ id: row.id || crypto.randomUUID(), owner: row.owner || '', deadline: row.deadline || '', task: row.task || '' }))
+      ? raw.actions.map((row) => ({
+        id: row.id || crypto.randomUUID(),
+        owner: row.owner || '',
+        deadline: row.deadline || '',
+        task: row.task || '',
+        status: ['open', 'blocked', 'done'].includes(row.status) ? row.status : 'open',
+      }))
       : [blankActionRow()],
   };
 }
@@ -153,13 +160,15 @@ function renderRows(listElement, rows, template, kind) {
     fragment.querySelectorAll('[data-field]').forEach((input) => {
       const field = input.dataset.field;
       input.value = row[field] || '';
-      input.addEventListener('input', () => {
+      const syncRow = () => {
         const targetCollection = kind === 'timeline' ? state.timeline : state.actions;
         const targetRow = targetCollection.find((entry) => entry.id === row.id);
         if (!targetRow) return;
         targetRow[field] = input.value;
         update();
-      });
+      };
+      input.addEventListener('input', syncRow);
+      input.addEventListener('change', syncRow);
     });
     fragment.querySelector('.remove-row').addEventListener('click', () => {
       if (kind === 'timeline') {
@@ -186,7 +195,7 @@ function incidentReadiness() {
     state.handoff.trim(),
   ].filter(Boolean).length;
   const timelineComplete = state.timeline.filter((row) => row.time.trim() && row.event.trim()).length;
-  const actionsComplete = state.actions.filter((row) => row.owner.trim() && row.task.trim()).length;
+  const actionsComplete = state.actions.filter((row) => row.owner.trim() && row.task.trim() && row.status !== 'done').length;
 
   const rawScore = (requiredFacts * 10) + (checksComplete * 5) + (timelineComplete * 6) + (actionsComplete * 6);
   return Math.min(100, rawScore);
@@ -199,7 +208,7 @@ function missingItems() {
   if (!state.impact.trim()) items.push('Customer impact is not described yet.');
   if (!state.detection.trim()) items.push('Detection signal is missing.');
   if (!state.timeline.some((row) => row.time.trim() && row.event.trim())) items.push('Timeline has no timestamped event yet.');
-  if (!state.actions.some((row) => row.owner.trim() && row.task.trim())) items.push('No owned next action is ready for the next shift.');
+  if (!state.actions.some((row) => row.owner.trim() && row.task.trim() && row.status !== 'done')) items.push('No open or blocked owned action is ready for the next shift.');
   if (!state.checks.monitoring && state.phase !== 'Resolved') items.push('Monitoring confirmation is still unchecked.');
   if (!state.handoff.trim()) items.push('Next-shift handoff note is missing.');
   return items;
@@ -225,7 +234,7 @@ function buildMarkdown() {
     .map((row) => `- ${row.time || 'Time TBD'} | ${row.owner || 'Owner TBD'} | ${row.event || 'Event TBD'}`);
   const actionRows = state.actions
     .filter((row) => row.owner.trim() || row.task.trim() || row.deadline.trim())
-    .map((row) => `- ${row.owner || 'Owner TBD'} | ${row.deadline || 'Deadline TBD'} | ${row.task || 'Action TBD'}`);
+    .map((row) => `- ${formatActionStatus(row.status)} | ${row.owner || 'Owner TBD'} | ${row.deadline || 'Deadline TBD'} | ${row.task || 'Action TBD'}`);
 
   return [
     `# ${state.title || 'Untitled incident'}`,
@@ -270,7 +279,32 @@ function buildMarkdown() {
 }
 
 function firstOwnedAction() {
-  return state.actions.find((row) => row.owner.trim() && row.task.trim());
+  return state.actions.find((row) => row.status === 'blocked' && row.owner.trim() && row.task.trim())
+    || state.actions.find((row) => row.status === 'open' && row.owner.trim() && row.task.trim())
+    || state.actions.find((row) => row.owner.trim() && row.task.trim());
+}
+
+function formatActionStatus(status) {
+  if (status === 'blocked') return 'Blocked';
+  if (status === 'done') return 'Done';
+  return 'Open';
+}
+
+function buildActionPosture() {
+  const blocked = state.actions.filter((row) => row.status === 'blocked' && (row.owner.trim() || row.task.trim())).length;
+  const open = state.actions.filter((row) => row.status === 'open' && (row.owner.trim() || row.task.trim())).length;
+  const done = state.actions.filter((row) => row.status === 'done' && (row.owner.trim() || row.task.trim())).length;
+
+  if (!blocked && !open && !done) {
+    return 'No action rows are populated yet.';
+  }
+  if (blocked) {
+    return `${blocked} blocked, ${open} open, ${done} done. The next shift should start with the blocked work first.`;
+  }
+  if (open) {
+    return `${open} open, ${done} done, no blocked actions. The handoff is actionable but still needs follow-through.`;
+  }
+  return `${done} done, no open follow-up. This incident is close to wrap-up if the narrative is complete.`;
 }
 
 function buildExecutiveUpdate() {
@@ -334,8 +368,9 @@ function update() {
   const missing = missingItems();
   readinessScoreEl.textContent = `${incidentReadiness()}%`;
   timelineCountEl.textContent = String(state.timeline.filter((row) => row.time.trim() || row.event.trim()).length);
-  actionCountEl.textContent = String(state.actions.filter((row) => row.owner.trim() || row.task.trim()).length);
+  actionCountEl.textContent = String(state.actions.filter((row) => row.status !== 'done' && (row.owner.trim() || row.task.trim())).length);
   postureSummaryEl.textContent = postureSummary();
+  actionPostureEl.textContent = buildActionPosture();
 
   missingListEl.innerHTML = '';
   (missing.length ? missing : ['No obvious gaps. This brief is ready to hand off.']).forEach((item) => {
